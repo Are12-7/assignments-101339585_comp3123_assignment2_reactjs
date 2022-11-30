@@ -1,64 +1,75 @@
 const express = require('express');
 const UserModel = require('../models/User');
-const { check } = require('express-validator');
-const {validationResult} = require('express-validator');
+const Authenticate = require('../middleware/Authenticate');
 var jwt = require('jsonwebtoken');
-var expressJwt = require('express-jwt');
 const router = express.Router();
+const bcryptjs = require('bcryptjs');
 
-// SIGN-UP
-router.post('/signup', [
-    //validate user input
-    check('username', 'Username should be at least 3 characters').isLength({ min: 3 }),
-    check('email', 'Email should be valid').isEmail(),
-    check('password', 'Password should be at least 6 characters').isLength({ min: 6 })   
-], async (req, res) => {
-    const errors = validationResult(req);
-    //Checking user input 
-    if(!errors.isEmpty()){ return res.status(400).send({error: errors.array()[0].msg})}
-    const newUser = new UserModel(req.body);
-    //If there's no errors, create a new user
+// REGISTER
+router.post('/register', async (req, res) => {
     try {
-        await newUser.save();
-        res.status(201).send(newUser);
+        const username = req.body.username;
+        const email = req.body.email;
+        const password = req.body.password;
+
+        const newUser = new UserModel({
+            username: username,
+            email: email,
+            password: password
+        });
         
+        //Create User
+        const created = await newUser.save();
+        console.log(created);
+        res.status(201).send(newUser)
     } catch (error) {
-        res.status(500).send({ message: 'Error while creating user  ' });        
+        res.status(500).send({message: 'Error While Creating User'})
+        
+    }
+})
+
+//LOG-IN
+router.post('/login', async (req, res) => {
+    try {
+        const email = req.body.email;
+        const password = req.body.password;
+
+        //Find User if exist
+        const user = await UserModel.findOne({ email: email });
+        if (user) {
+            //Verify User
+            const isMatch = await bcryptjs.compare(password, user.password);
+
+            if (isMatch) {
+                //Generate Token
+                const token = await user.generateToken();
+                res.cookie('jwt', token, {
+                    //Will expire in 24 hours
+                    expires: new Date(Date.now() + 86400000),
+                    httpOnly : true
+                })
+                res.status(200).send('User logged in successfully')
+            } else {
+                res.status(400).send('Invalid Credentials');
+            }
+        }else {
+            res.status(400).send('Invalid Credentials');
+        }
+        //
+    } catch (error) {
+        res.status(400).send(error);
+        
     }
 });
 
-//LOG-IN
-router.post('/login', (req, res) => {
-    const { username, password } = req.body;
-    UserModel.findOne({ username }, (error, user) => {
-        if (error || !user)
-            return res.status(500).json({ error: 'Username was not found' });
-        
-            // Authenticate User
-        if (!user.authenticate(password))
-            return res.status(500).json({ status:'false', message: "Invalid Username and password" });
-        
-            //Create Token
-            const token = jwt.sign({ _id: user._id }, process.env.SECRET);
+//Logout
+router.get('/logout', (req, res) => {
+    res.clearCookie('jwt', { path: '/login' })
+    res.status(200).send('User Logged Out')
+})
 
-            //Token in cookie
-            res.cookie('token', token, { expire: new Date() + 1 });
-            
-            //Response
-            const {_id, username,email} = user
-            return res.json({
-                user: {
-                    _id,
-                    status: 'true',
-                    username,
-                    email,
-                    message: 'User logged in successfully',
-                    token
-                }
-            })
-        })
-});
-
-
-
+//Authentication
+router.get('/auth', Authenticate, (req, res) => {
+    
+})
 module.exports = router;

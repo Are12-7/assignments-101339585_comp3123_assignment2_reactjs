@@ -61,10 +61,11 @@ router.get('/:eid', async (req, res) => {
 });
 
 //Update Employee By Id
-router.put('/:eid', async (req, res) => {
+router.put('/edit/:eid', async (req, res) => {
     try {
         console.log(req.body);
-        const updateEmployee = await EmployeeModel.findByIdAndUpdate(req.params.eid,req.body);
+        const { eid } = req.params;
+        const updateEmployee = await EmployeeModel.findByIdAndUpdate(eid,req.body);
         const ne = await updateEmployee.save()
         res.status(202).send(ne);        
     } catch (error) {
@@ -73,7 +74,7 @@ router.put('/:eid', async (req, res) => {
 });
 
 //Delete Employee By Id
-router.delete('/:eid', async (req, res) => {
+router.delete('/delete/:eid', async (req, res) => {
     try {
         const employee = await EmployeeModel.findByIdAndDelete(req.params.eid);
         if (!employee) {
